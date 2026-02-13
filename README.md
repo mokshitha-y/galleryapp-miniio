@@ -1,11 +1,80 @@
-# Gallery App (Keycloak + MinIO)
+# Gallery
 
-A gallery application with **Keycloak** (in the background) for user storage and authentication and **MinIO** (S3-compatible) for storage. The app provides **its own Login and Sign up pages**; Keycloak is never shown in the UI. Each user gets their **own MinIO bucket** (`gallery-{userId}`). In the UI, users can **upload** (single or bulk), **view**, **download**, and **delete** files (including video). Delete supports **soft delete** (move to recycle bin) and **hard delete** (permanent). Recycle bin allows **restore** or **permanent delete**.
+A full-stack gallery app with custom login and sign-up. Each user has a dedicated object store bucket. Keycloak handles authentication; MinIO (S3-compatible) handles file storage.
+
+---
+
+## Tech stack
+
+| Layer      | Technology |
+|-----------|------------|
+| **Frontend** | Next.js 14 (App Router), React 18, Keycloak JS |
+| **Backend**  | Node.js, Express, JWT (Keycloak JWKS), Multer |
+| **Storage**  | MinIO (S3 API), AWS SDK v3, presigned URLs |
+| **Auth**     | Keycloak (OIDC, password + refresh grant) |
+| **Infra**    | Docker Compose (Keycloak + MinIO) |
+
+---
+
+## Features
+
+- **Auth:** Custom login and registration UI; Keycloak in the background (no Keycloak UI in the app).
+- **Storage:** One MinIO bucket per user (`gallery-{username}`). Upload (single or bulk), view, download.
+- **Visibility:** Bucket-level and per-file public/private (prefix-based: public files under `public/`). When the bucket is public, only files marked public are readable via direct link.
+- **Recycle bin:** Soft delete (move to `trash/`), restore, hard delete. Trash listed in a separate tab.
+- **API:** REST over JSON. Presigned URLs for view/download and direct upload to MinIO.
+
+---
+
+## Project structure
+
+```
+gallery-miniio/
+├── backend/
+│   ├── src/
+│   │   ├── index.js          # Express app, CORS, routes
+│   │   ├── auth.js            # JWT verification (Keycloak JWKS)
+│   │   ├── minio.js           # S3/MinIO client, bucket policy, list/put/copy/delete
+│   │   └── routes/
+│   │       ├── auth.js        # Login, register, refresh
+│   │       └── files.js       # List, upload, presigned URL, download, trash, visibility, bucket access
+│   ├── package.json
+│   └── .env.example
+├── frontend/
+│   ├── app/
+│   │   ├── layout.jsx
+│   │   ├── page.jsx            # Home
+│   │   ├── login/page.jsx
+│   │   ├── register/page.jsx
+│   │   └── gallery/
+│   │       ├── layout.jsx
+│   │       └── page.jsx        # Gallery UI (upload, list, bucket/file visibility, trash)
+│   ├── components/
+│   │   └── ViewModal.jsx       # Image/video/PDF preview
+│   ├── context/
+│   │   └── AuthContext.jsx     # Token state, login, logout, refresh
+│   ├── lib/
+│   │   ├── api.js              # API client
+│   │   └── keycloak.js         # Keycloak init
+│   ├── package.json
+│   ├── next.config.js
+│   └── .env.example
+├── keycloak/
+│   └── realm/
+│       └── gallery-realm.json # Optional realm import
+├── docker-compose.yml          # Keycloak + MinIO
+├── .env.example                # Env template (root)
+└── PROJECT_GUIDE.md            # Full API reference and setup
+```
+
+---
 
 ## Prerequisites
 
-- Node.js 18+
-- Docker and Docker Compose
+- **Node.js** 18+
+- **Docker** and **Docker Compose**
+
+---
 
 ## Quick start
 
@@ -15,8 +84,8 @@ A gallery application with **Keycloak** (in the background) for user storage and
 docker compose up -d
 ```
 
-- **Keycloak**: http://localhost:8080 (admin / admin). Create realm `gallery` and client `gallery-app` if not auto-imported; enable User registration. All app users are Keycloak users.
-- **MinIO Console**: http://localhost:9001 (minioadmin / minioadmin). Each user gets a dedicated bucket (e.g. `gallery-abc123`) when they first upload.
+- Keycloak: http://localhost:8080 (admin / admin). Realm `gallery`, client `gallery-app`; enable user registration if not imported.
+- MinIO Console: http://localhost:9001 (minioadmin / minioadmin).
 
 ### 2. Backend
 
@@ -27,9 +96,9 @@ npm install
 npm run dev
 ```
 
-API runs at http://localhost:4000. **MinIO credentials**: set `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` in `.env`. If you change these (or rotate keys), restart the backend so it picks up the new values.
+API: http://localhost:4000. Set `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` in `.env` to match MinIO.
 
-### 3. Frontend (Next.js, App Router)
+### 3. Frontend
 
 ```bash
 cd frontend
@@ -38,35 +107,33 @@ npm install
 npm run dev
 ```
 
-App runs at http://localhost:3000.
+App: http://localhost:3000. Use **Log in** or **Sign up**; upload, view, download, and manage visibility and recycle bin from the gallery.
 
-### 4. Use the app
-
-- Open http://localhost:3000 → use **Log in** or **Sign up** (custom UI; Keycloak runs in the background).
-- **Upload**: single or multiple files (bulk); images and video supported.
-- **View**: open image/video in a modal.
-- **Download**: save file to device.
-- **Bucket public/private**: toggle whether anonymous access is allowed; when Public, only files marked Public are readable via direct link.
-- **Make public / Make private** (per file): control which files can be opened via direct link when the bucket is Public (prefix-based; no object ACLs).
-- **Move to recycle bin**: soft delete (file moved to `trash/` in your bucket).
-- **Delete permanently**: hard delete from main list or from recycle bin.
-- **Recycle bin** tab: restore or permanently delete trashed files.
-
-## Project structure
-
-- `backend/` – Express API: JWT (Keycloak), one bucket per user, list/upload/download, bucket and per-file public/private (prefix-based), soft and hard delete, trash/restore.
-- `frontend/` – Next.js 14 (App Router), Keycloak JS, gallery UI with view/download/upload, bucket and file visibility, recycle bin.
-- `keycloak/realm/` – Keycloak realm import (optional).
-- `docker-compose.yml` – Keycloak + MinIO.
-- `VERIFICATION.md` – How to verify the 3 access cases (bucket private, public+file private, public+file public).
-- `PROJECT_GUIDE.md` – Full API reference and setup details.
-
-## Environment
-
-- **Backend** (`backend/.env`): `KEYCLOAK_*`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `PORT`, `FRONTEND_ORIGIN`. Changing access/secret keys and restarting the backend applies new MinIO credentials.
-- **Frontend** (`frontend/.env.local`): `NEXT_PUBLIC_KEYCLOAK_*`, `NEXT_PUBLIC_API_URL`.
+---
 
 ## Scripts
 
-- **Backend** (`backend/`): `npm run dev` (watch), `npm start`.
-- **Frontend** (`frontend/`): `npm run dev`, `npm run build`, `npm start`, `npm run lint`.
+| Location   | Command         | Description              |
+|-----------|-----------------|--------------------------|
+| `backend/`  | `npm run dev`   | Run API with watch       |
+| `backend/`  | `npm start`     | Run API (production)     |
+| `frontend/` | `npm run dev`   | Next.js dev server       |
+| `frontend/` | `npm run build` | Next.js production build |
+| `frontend/` | `npm start`     | Run production build     |
+
+---
+
+## Environment
+
+| File | Purpose |
+|------|---------|
+| `backend/.env` | `KEYCLOAK_*`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `PORT`, `FRONTEND_ORIGIN` |
+| `frontend/.env.local` | `NEXT_PUBLIC_API_URL`, optional `NEXT_PUBLIC_KEYCLOAK_*` |
+
+Copy from `.env.example` in each directory. Restart the backend after changing MinIO credentials.
+
+---
+
+## Docs
+
+- **PROJECT_GUIDE.md** — API reference, Keycloak and MinIO setup, presigned URLs.
