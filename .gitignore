@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build / output
+dist/
+.next/
+out/
+
+# Environment (secrets)
+.env
+.env.local
+.env.*.local
+*.local
+
+# Logs and OS
+*.log
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,30 @@
+{
+  "realm": "gallery",
+  "enabled": true,
+  "displayName": "Gallery",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "clients": [
+    {
+      "clientId": "gallery-app",
+      "name": "Gallery App",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "redirectUris": ["http://localhost:3000/*", "http://localhost:3000", "http://localhost:3000/callback"],
+      "webOrigins": ["http://localhost:3000", "+"],
+      "fullScopeAllowed": true
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "user",
+        "description": "Gallery user role"
+      }
+    ]
+  },
+  "defaultRoles": ["user"]
+}
